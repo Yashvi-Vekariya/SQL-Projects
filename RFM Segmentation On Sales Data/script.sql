@@ -1,172 +1,249 @@
 -- Creating the Database
 CREATE DATABASE rfm_analysis;
+USE rfm_analysis;
 
+-- Creating the table with proper column names
 CREATE TABLE rfm_data (
-    ORDERNU INT,
+    ORDERNUMBER INT,
     QUANTITY INT,
-    PRICEEACI DECIMAL(10,2),
-    ORDERLIN INT,
+    PRICEEACH DECIMAL(10,2),
+    ORDERLINENUMBER INT,
     SALES DECIMAL(10,2),
-    ORDERDA DATE,
+    ORDERDATE DATE,
     STATUS VARCHAR(20),
-    QTRID INT,
-    MONTHIC INT,
-    YEARID INT,
-    PRODUCTIMSRP DECIMAL(10,2),
-    PRODUCTI VARCHAR(50),
-    CUSTOMEI INT,
+    QTR_ID INT,
+    MONTH_ID INT,
+    YEAR_ID INT,
+    PRODUCTLINE VARCHAR(50),
+    MSRP DECIMAL(10,2),
+    CUSTOMERNAME VARCHAR(100),
+    CUSTOMERID INT,
     PHONE VARCHAR(20),
-    ADDRESSL1 VARCHAR(100),
-    ADDRESSL2 VARCHAR(100),
+    ADDRESSLINE1 VARCHAR(100),
+    ADDRESSLINE2 VARCHAR(100),
     CITY VARCHAR(50),
     STATE VARCHAR(50),
-    POSTALCO VARCHAR(20),
+    POSTALCODE VARCHAR(20),
     COUNTRY VARCHAR(50),
     TERRITORY VARCHAR(50),
-    CONTACTI VARCHAR(50),
-    CONTACTI2 VARCHAR(50),
+    CONTACTFIRSTNAME VARCHAR(50),
+    CONTACTLASTNAME VARCHAR(50),
     DEALSIZE VARCHAR(20)
 );
 
+-- Enable local infile loading
+SET GLOBAL local_infile = 1;
+
+-- Increase max_allowed_packet size to handle larger files
+SET GLOBAL max_allowed_packet = 1073741824; -- 1GB
+
+-- Load data from CSV file
+-- Make sure to adjust the file path to where your CSV is located
+LOAD DATA LOCAL INFILE 
+'D:/SQL-Projects/RFM Segmentation On Sales Data/RFM Data.csv'
+INTO TABLE rfm_data
+FIELDS TERMINATED BY ',' 
+OPTIONALLY ENCLOSED BY '"'
+LINES TERMINATED BY '\r\n'  -- Using Windows line endings
+IGNORE 1 ROWS;
 
 -- Inspecting Data
 SELECT * FROM rfm_data LIMIT 10;
--- unique value 
 
-select distinct status from rfm_data;
+-- Distinct value checks
+SELECT DISTINCT STATUS FROM rfm_data;
+SELECT DISTINCT COUNTRY FROM rfm_data;
+SELECT DISTINCT YEAR_ID FROM rfm_data;
+SELECT DISTINCT PRODUCTLINE FROM rfm_data;
+SELECT DISTINCT DEALSIZE FROM rfm_data;
+SELECT DISTINCT TERRITORY FROM rfm_data;
 
-select distinct status from rfm_data;
-select distinct COUNTRY from rfm_data;
-
-select distinct year_id from rfm_data;
-select distinct PRODUCTLINE from rfm_data;
-
-select distinct DEALSIZE from rfm_data;
-select distinct TERRITORY from rfm_data;
-
-
--- Grouping sales by product line to understand the distribution of sales across different product categories.
--- We're calculating the total revenue and the number of orders for each product line.
-select PRODUCTLINE, ROUND(sum(sales),0) AS Revenue, COUNT(DISTINCT ORDERNUMBER) AS NO_OF_ORDERS
-from rfm_data
-group by PRODUCTLINE
-order by 3 desc;
-
--- Analyzing sales revenue by year to identify trends or changes over time.
-select YEAR_ID, sum(sales) Revenue
-from rfm_data
-group by YEAR_ID
-order by 2 desc;
-
--- Investigating sales revenue by deal size to understand the impact of deal sizes on revenue.
-select  DEALSIZE,  sum(sales) Revenue
-from rfm_data
-group by DEALSIZE
-order by 2 desc;
-
--- Identifying the city with the highest sales in a specific country (e.g., 'UK').
-SELECT city, SUM(sales) AS Revenue
-FROM rfm_data
-WHERE country = 'UK'
-GROUP BY city
-ORDER BY Revenue DESC
-LIMIT 0, 1000;
-
--- Finding the best month for sales in a specific year (e.g., 2003) and calculating revenue and frequency.
-select  MONTH_ID, sum(sales) Revenue, count(ORDERNUMBER) Frequency
-from rfm_data
-where YEAR_ID = 2003
-group by  MONTH_ID
-order by 2 desc;
-
--- Finding the best month for sales in a specific year (e.g., 2004) and calculating revenue and frequency.
-select  MONTH_ID, sum(sales) Revenue, count(ORDERNUMBER) Frequency
-from rfm_data
-where YEAR_ID = 2004
-group by  MONTH_ID
-order by 2 desc;
-
--- Finding the best month for sales in a specific year (e.g., 2005 )and calculating revenue and frequency.
-select  MONTH_ID, sum(sales) Revenue, count(ORDERNUMBER) Frequency
-from rfm_data
-where YEAR_ID = 2005
-group by  MONTH_ID
-order by 2 desc;
-
-
-
--- Identifying the top-selling product line in a specific month (e.g., November 2004).
-select  MONTH_ID, PRODUCTLINE, sum(sales) Revenue, count(ORDERNUMBER)
-from SALES_SAMPLE_DATA
-where YEAR_ID = 2004 and MONTH_ID = 11
-group by  MONTH_ID, PRODUCTLINE
-order by 3 desc;
-
-
-
--- Determining the best-selling product in the United States.
-select country, YEAR_ID, PRODUCTLINE, sum(sales) Revenue
-from rfm_data
-where country = 'USA'
-group by  country, YEAR_ID, PRODUCTLINE
-order by 4 desc;
-
-
--- Identifying the top-selling product line in a specific month (e.g., November 2004).
-select  MONTH_ID, PRODUCTLINE, sum(sales) Revenue, count(ORDERNUMBER)
-from rfm_data
-where YEAR_ID = 2004 and MONTH_ID = 11
-group by  MONTH_ID, PRODUCTLINE
-order by 3 desc;
-
-
-
-
-
-
-
--- We need to calculate each metrics
+-- Sales by product line
 SELECT 
-    MAX(ORDERDATE)
+    PRODUCTLINE, 
+    ROUND(SUM(SALES), 0) AS Revenue, 
+    COUNT(DISTINCT ORDERNUMBER) AS NO_OF_ORDERS
+FROM 
+    rfm_data
+GROUP BY 
+    PRODUCTLINE
+ORDER BY 
+    3 DESC;
+
+-- Sales by year
+SELECT 
+    YEAR_ID, 
+    SUM(SALES) AS Revenue
+FROM 
+    rfm_data
+GROUP BY 
+    YEAR_ID
+ORDER BY 
+    2 DESC;
+
+-- Sales by deal size
+SELECT  
+    DEALSIZE,  
+    SUM(SALES) AS Revenue
+FROM 
+    rfm_data
+GROUP BY 
+    DEALSIZE
+ORDER BY 
+    2 DESC;
+
+-- Top cities by sales in UK
+SELECT 
+    CITY, 
+    SUM(SALES) AS Revenue
+FROM 
+    rfm_data
+WHERE 
+    COUNTRY = 'UK'
+GROUP BY 
+    CITY
+ORDER BY 
+    Revenue DESC
+LIMIT 100;  -- Added this limit to avoid potential issues
+
+-- Best months for sales by year
+-- Year 2003
+SELECT  
+    MONTH_ID, 
+    SUM(SALES) AS Revenue, 
+    COUNT(ORDERNUMBER) AS Frequency
+FROM 
+    rfm_data
+WHERE 
+    YEAR_ID = 2003
+GROUP BY  
+    MONTH_ID
+ORDER BY 
+    2 DESC;
+
+-- Year 2004
+SELECT  
+    MONTH_ID, 
+    SUM(SALES) AS Revenue, 
+    COUNT(ORDERNUMBER) AS Frequency
+FROM 
+    rfm_data
+WHERE 
+    YEAR_ID = 2004
+GROUP BY  
+    MONTH_ID
+ORDER BY 
+    2 DESC;
+
+-- Year 2005
+SELECT  
+    MONTH_ID, 
+    SUM(SALES) AS Revenue, 
+    COUNT(ORDERNUMBER) AS Frequency
+FROM 
+    rfm_data
+WHERE 
+    YEAR_ID = 2005
+GROUP BY  
+    MONTH_ID
+ORDER BY 
+    2 DESC;
+
+-- Top product lines in November 2004
+SELECT  
+    MONTH_ID, 
+    PRODUCTLINE, 
+    SUM(SALES) AS Revenue, 
+    COUNT(ORDERNUMBER) AS Order_Count
+FROM 
+    rfm_data
+WHERE 
+    YEAR_ID = 2004 AND MONTH_ID = 11
+GROUP BY  
+    MONTH_ID, PRODUCTLINE
+ORDER BY 
+    3 DESC;
+
+-- Best-selling products in USA by year
+SELECT 
+    COUNTRY, 
+    YEAR_ID, 
+    PRODUCTLINE, 
+    SUM(SALES) AS Revenue
+FROM 
+    rfm_data
+WHERE 
+    COUNTRY = 'USA'
+GROUP BY  
+    COUNTRY, YEAR_ID, PRODUCTLINE
+ORDER BY 
+    4 DESC;
+
+-- RFM Analysis
+-- First getting the most recent order date
+SELECT 
+    MAX(ORDERDATE) AS Latest_Order_Date
 FROM
     rfm_data;
 
-with cte1 as (
-select customername,
-sum(sales) as monetaryvalue,
-avg(sales) as AVGmonetaryvalue,
-count(distinct ordernumber) as Frequency,
-max(orderdate) as last_order_date,
-(select max(ORDERDATE) from rfm_data)  as final_date
-from rfm_data
-group by CUSTOMERNAME
+-- Fixed RFM Analysis - Separating the CTE and the final query
+WITH RFM_Base AS (
+    SELECT 
+        CUSTOMERNAME,
+        SUM(SALES) AS MonetaryValue,
+        AVG(SALES) AS AvgMonetaryValue,
+        COUNT(DISTINCT ORDERNUMBER) AS Frequency,
+        MAX(ORDERDATE) AS Last_Order_Date,
+        (SELECT MAX(ORDERDATE) FROM rfm_data) AS Final_Date
+    FROM 
+        rfm_data
+    GROUP BY 
+        CUSTOMERNAME
 ),
-cte2 as (
-select*,datediff(final_date,last_order_date)+1 as Recency from cte1
-order by Recency
+RFM_Calc AS (
+    SELECT 
+        *,
+        DATEDIFF(Final_Date, Last_Order_Date) AS Recency
+    FROM 
+        RFM_Base
 ),
-cte3 as (
-select*,
-ntile(4) over(order by recency desc) as rfm_recency,
-ntile(4) over(order by frequency ) as rfm_frequency,
-ntile(4) over(order by monetaryvalue) as rfm_monetary
- from cte2),
- 
- -- quatiles concepts
- cte4 as (
- select *, concat(rfm_recency,rfm_frequency,rfm_monetary) as RFM_SCORE
- from cte3
- )
-SELECT*,
-    customername,
-    rfm_score,
+RFM_Scores AS (
+    SELECT 
+        *,
+        NTILE(4) OVER (ORDER BY Recency DESC) AS rfm_recency,
+        NTILE(4) OVER (ORDER BY Frequency) AS rfm_frequency,
+        NTILE(4) OVER (ORDER BY MonetaryValue) AS rfm_monetary
+    FROM 
+        RFM_Calc
+),
+RFM_Final AS (
+    SELECT 
+        *,
+        CONCAT(rfm_recency, rfm_frequency, rfm_monetary) AS RFM_SCORE
+    FROM 
+        RFM_Scores
+)
+-- Final output query
+SELECT 
+    CUSTOMERNAME,
+    MonetaryValue,
+    AvgMonetaryValue,
+    Frequency,
+    Last_Order_Date,
+    Recency,
+    rfm_recency,
+    rfm_frequency,
+    rfm_monetary,
+    RFM_SCORE,
     CASE 
-        WHEN RFM_SCORE IN ('414', '314','424','434','444','324','334') THEN 'Loyal Customers'
+        WHEN RFM_SCORE IN ('414', '314', '424', '434', '444', '324', '334') THEN 'Loyal Customers'
         WHEN RFM_SCORE IN ('113', '124', '214') THEN 'Potential Churners'
         WHEN RFM_SCORE IN ('411', '422') THEN 'New Customers'
         WHEN RFM_SCORE IN ('314', '244') THEN 'Big Spenders'
-        WHEN RFM_SCORE IN ('134', '244') THEN 'Can’t Lose Them'
+        WHEN RFM_SCORE IN ('134', '244') THEN 'Can''t Lose Them'
         ELSE 'Other'
-    END AS segment
+    END AS Customer_Segment
 FROM 
-    cte4;
+    RFM_Final
+ORDER BY 
+    MonetaryValue DESC;
