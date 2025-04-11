@@ -1,33 +1,24 @@
-create schema mysales;
-
--- Switch to using the SALES database
+-- Create schema and select it for use
+CREATE SCHEMA mysales;
 USE mysales;
 
--- Create a new schema named COHORT_ANALYSIS
--- Note: MySQL doesn't have schemas in the same way as Snowflake. 
--- In MySQL, databases serve a similar purpose to schemas in Snowflake. 
--- Therefore, you can ignore the schema creation or manage it with a separate database if necessary.
-
--- Create a table named RETAIL with various columns to store retail data
+-- Create the RETAIL table with appropriate data types
 CREATE TABLE IF NOT EXISTS RETAIL (
     InvoiceNo VARCHAR(10),
     StockCode VARCHAR(20),
     Description VARCHAR(100),
-    Quantity DECIMAL(8,2),  -- Use DECIMAL for numbers with precision in MySQL
-    InvoiceDate VARCHAR(25),
-    UnitPrice DECIMAL(8,2), -- Use DECIMAL for numbers with precision in MySQL
-    CustomerID BIGINT,       -- Use BIGINT for large integer IDs
+    Quantity DECIMAL(8,2),
+    InvoiceDate DATETIME,      -- Changed to DATETIME instead of VARCHAR
+    UnitPrice DECIMAL(8,2),
+    CustomerID BIGINT,
     Country VARCHAR(25)
 );
 
--- Select the first 5 rows from the RETAIL table
-SELECT * FROM RETAIL LIMIT 5;
-
-
-
+-- Check configuration for loading data
 SHOW GLOBAL VARIABLES LIKE 'local_infile';
 SET GLOBAL local_infile = 1;
 
+-- Load data with proper date conversion
 LOAD DATA LOCAL INFILE 
 'D:/SQL-Projects/Cohort Analysis Using SQL/Online Retail Data.csv'
 INTO TABLE retail
@@ -39,14 +30,12 @@ IGNORE 1 ROWS
 UnitPrice, CustomerID, Country)
 SET InvoiceDate = STR_TO_DATE(@date_str, '%d/%m/%Y %H:%i');
 
+-- Basic data checks
+SELECT count(*) FROM retail;
+SELECT count(distinct InvoiceNo) FROM retail;
+SELECT count(distinct customerid) FROM retail;
 
-select count(*) from retail;
-select count(distinct InvoiceNo) from retail;
-select count(distinct customerid) from retail;
-
-
-
--- Step 1: Create a Common Table Expression (CTE) named CTE1 to prepare data
+-- Query 1: Basic revenue calculation
 WITH CTE1 AS (
     SELECT 
         InvoiceNo, CUSTOMERID, 
@@ -59,25 +48,32 @@ SELECT *
 FROM CTE1
 LIMIT 100;
 
-
--- Step 2: Create CTE2 to calculate purchase and first purchase months
+-- Query 2: Invoice count by cohort (corrected query with connected CTEs)
+WITH CTE1 AS (
+    SELECT 
+        InvoiceNo, CUSTOMERID, 
+        INVOICEDATE, 
+        ROUND(QUANTITY * UNITPRICE, 2) AS REVENUE
+    FROM RETAIL
+    WHERE CUSTOMERID IS NOT NULL
+),
 CTE2 AS (
-    SELECT InvoiceNo, CUSTOMERID, INVOICEDATE, 
-        DATE_FORMAT(INVOICEDATE, '%Y-%m-01') AS PURCHASE_MONTH, -- MySQL equivalent to truncating to month: use DATE_FORMAT
-        DATE_FORMAT(MIN(INVOICEDATE) OVER (PARTITION BY CUSTOMERID ORDER BY INVOICEDATE), '%Y-%m-01') AS FIRST_PURCHASE_MONTH,
+    SELECT 
+        InvoiceNo, CUSTOMERID, INVOICEDATE, 
+        DATE_FORMAT(INVOICEDATE, '%Y-%m-01') AS PURCHASE_MONTH,
+        (SELECT DATE_FORMAT(MIN(INVOICEDATE), '%Y-%m-01') 
+         FROM RETAIL r2 
+         WHERE r2.CUSTOMERID = CTE1.CUSTOMERID) AS FIRST_PURCHASE_MONTH,
         REVENUE
     FROM CTE1
 ),
-
--- Step 3: Create CTE3 to determine cohort months
 CTE3 AS (
-    SELECT InvoiceNo, FIRST_PURCHASE_MONTH,
-        CONCAT('Month_', TIMESTAMPDIFF(MONTH, FIRST_PURCHASE_MONTH, PURCHASE_MONTH)) AS COHORT_MONTH -- Use TIMESTAMPDIFF in MySQL
+    SELECT 
+        InvoiceNo, FIRST_PURCHASE_MONTH,
+        CONCAT('Month_', TIMESTAMPDIFF(MONTH, FIRST_PURCHASE_MONTH, PURCHASE_MONTH)) AS COHORT_MONTH
     FROM CTE2
 )
-
--- Step 4: Perform the final query to pivot and count invoices by cohort months
--- Since MySQL does not have a direct PIVOT function, we use conditional aggregation
+-- Final pivoted query for invoice counts
 SELECT 
     FIRST_PURCHASE_MONTH,
     SUM(CASE WHEN COHORT_MONTH = 'Month_0' THEN 1 ELSE 0 END) AS Month_0,
@@ -97,36 +93,32 @@ FROM CTE3
 GROUP BY FIRST_PURCHASE_MONTH
 ORDER BY FIRST_PURCHASE_MONTH;
 
-
-
-
--- Step 1: Create a Common Table Expression (CTE) named CTE1 to prepare data
+-- Query 3: Unique customers by cohort
 WITH CTE1 AS (
     SELECT 
         InvoiceNo, CUSTOMERID, 
-        INVOICEDATE, -- MySQL uses STR_TO_DATE for date parsing
+        INVOICEDATE, 
         ROUND(QUANTITY * UNITPRICE, 2) AS REVENUE
     FROM RETAIL
     WHERE CUSTOMERID IS NOT NULL
 ),
-
--- Step 2: Create CTE2 to calculate purchase and first purchase months
 CTE2 AS (
-    SELECT InvoiceNo, CUSTOMERID, INVOICEDATE, 
-        DATE_FORMAT(INVOICEDATE, '%Y-%m-01') AS PURCHASE_MONTH, -- Truncate to the first day of the month
-        DATE_FORMAT(MIN(INVOICEDATE) OVER (PARTITION BY CUSTOMERID ORDER BY INVOICEDATE), '%Y-%m-01') AS FIRST_PURCHASE_MONTH,
+    SELECT 
+        InvoiceNo, CUSTOMERID, INVOICEDATE, 
+        DATE_FORMAT(INVOICEDATE, '%Y-%m-01') AS PURCHASE_MONTH,
+        (SELECT DATE_FORMAT(MIN(INVOICEDATE), '%Y-%m-01') 
+         FROM RETAIL r2 
+         WHERE r2.CUSTOMERID = CTE1.CUSTOMERID) AS FIRST_PURCHASE_MONTH,
         REVENUE
     FROM CTE1
 ),
-
--- Step 3: Create CTE3 to determine cohort months
 CTE3 AS (
-    SELECT CUSTOMERID, FIRST_PURCHASE_MONTH,
-        CONCAT('Month_', TIMESTAMPDIFF(MONTH, FIRST_PURCHASE_MONTH, PURCHASE_MONTH)) AS COHORT_MONTH -- Use TIMESTAMPDIFF in MySQL
+    SELECT 
+        CUSTOMERID, FIRST_PURCHASE_MONTH,
+        CONCAT('Month_', TIMESTAMPDIFF(MONTH, FIRST_PURCHASE_MONTH, PURCHASE_MONTH)) AS COHORT_MONTH
     FROM CTE2
 )
-
--- Final Query: Count distinct customers in each cohort for subsequent months
+-- Final query for distinct customer counts
 SELECT FIRST_PURCHASE_MONTH as Cohort,
     COUNT(DISTINCT IF(COHORT_MONTH = 'Month_0', CUSTOMERID, NULL)) as Month_0,
     COUNT(DISTINCT IF(COHORT_MONTH = 'Month_1', CUSTOMERID, NULL)) as Month_1,
@@ -145,41 +137,36 @@ FROM CTE3
 GROUP BY FIRST_PURCHASE_MONTH
 ORDER BY FIRST_PURCHASE_MONTH;
 
-
-
--- Step 1: Create a Common Table Expression (CTE) named CTE1 to calculate revenue from valid transactions
+-- Query 4: Total revenue by cohort month
 WITH CTE1 AS (
     SELECT 
         CUSTOMERID,
-        INVOICEDATE, -- Convert the date string to DATETIME
-        ROUND(QUANTITY * UNITPRICE, 0) AS REVENUE -- Calculate and round the revenue
+        INVOICEDATE,
+        ROUND(QUANTITY * UNITPRICE, 0) AS REVENUE
     FROM RETAIL
     WHERE CUSTOMERID IS NOT NULL
 ),
-
--- Step 2: Create CTE2 to calculate purchase and first purchase months
 CTE2 AS (
     SELECT 
         CUSTOMERID, 
         INVOICEDATE, 
-        DATE_FORMAT(INVOICEDATE, '%Y-%m-01') AS PURCHASE_MONTH, -- Truncate date to the first day of the month
-        DATE_FORMAT(MIN(INVOICEDATE) OVER (PARTITION BY CUSTOMERID ORDER BY INVOICEDATE), '%Y-%m-01') AS FIRST_PURCHASE_MONTH, -- Determine first purchase month
+        DATE_FORMAT(INVOICEDATE, '%Y-%m-01') AS PURCHASE_MONTH,
+        (SELECT DATE_FORMAT(MIN(INVOICEDATE), '%Y-%m-01') 
+         FROM RETAIL r2 
+         WHERE r2.CUSTOMERID = CTE1.CUSTOMERID) AS FIRST_PURCHASE_MONTH,
         REVENUE
     FROM CTE1
 ),
-
--- Step 3: Create CTE3 to calculate cohort months
 CTE3 AS (
     SELECT 
-        FIRST_PURCHASE_MONTH as Cohort, -- Rename first purchase month as Cohort
-        CONCAT('Month_', TIMESTAMPDIFF(MONTH, FIRST_PURCHASE_MONTH, PURCHASE_MONTH)) AS COHORT_MONTH, -- Calculate cohort month difference
+        FIRST_PURCHASE_MONTH as Cohort,
+        CONCAT('Month_', TIMESTAMPDIFF(MONTH, FIRST_PURCHASE_MONTH, PURCHASE_MONTH)) AS COHORT_MONTH,
         REVENUE
     FROM CTE2
 )
-
--- Final Query: Calculate the total revenue for each cohort month using conditional aggregation
+-- Final revenue calculation by cohort
 SELECT 
-    Cohort, -- The first purchase month (Cohort)
+    Cohort,
     SUM(CASE WHEN COHORT_MONTH = 'Month_0' THEN REVENUE ELSE 0 END) AS Month_0,
     SUM(CASE WHEN COHORT_MONTH = 'Month_1' THEN REVENUE ELSE 0 END) AS Month_1,
     SUM(CASE WHEN COHORT_MONTH = 'Month_2' THEN REVENUE ELSE 0 END) AS Month_2,
@@ -194,20 +181,5 @@ SELECT
     SUM(CASE WHEN COHORT_MONTH = 'Month_11' THEN REVENUE ELSE 0 END) AS Month_11,
     SUM(CASE WHEN COHORT_MONTH = 'Month_12' THEN REVENUE ELSE 0 END) AS Month_12
 FROM CTE3
-GROUP BY Cohort -- Group by the cohort (first purchase month)
-ORDER BY Cohort;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+GROUP BY Cohort
+ORDER BY Cohort;
