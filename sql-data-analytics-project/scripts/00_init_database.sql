@@ -1,144 +1,82 @@
-/*
-=============================================================
-Create Database and Schemas
-=============================================================
-Script Purpose:
-    This script creates a new database named 'DataWarehouseAnalytics' after checking if it already exists. 
-    If the database exists, it is dropped and recreated. Additionally, this script creates a schema called gold
-    and all required tables, then loads data from CSV files.
-	
-WARNING:
-    Running this script will drop the entire 'DataWarehouseAnalytics' database if it exists. 
-    All data in the database will be permanently deleted. Proceed with caution 
-    and ensure you have proper backups before running this script.
-*/
+-- Switch to master/root to manage databases
+-- Drop the database if it exists
+DROP DATABASE IF EXISTS DataWarehouseAnalytics;
 
-USE master;
-GO
-
--- Check if the database exists and drop it if it does
-IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'DataWarehouseAnalytics')
-BEGIN
-    ALTER DATABASE DataWarehouseAnalytics SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE DataWarehouseAnalytics;
-    PRINT 'Existing DataWarehouseAnalytics database dropped.';
-END;
-GO
-
--- Create the 'DataWarehouseAnalytics' database
+-- Create the new database
 CREATE DATABASE DataWarehouseAnalytics;
-PRINT 'DataWarehouseAnalytics database created successfully.';
-GO
 
+-- Switch to the new database
 USE DataWarehouseAnalytics;
-GO
 
--- Create Schemas
-CREATE SCHEMA gold;
-PRINT 'Gold schema created successfully.';
-GO
-
--- Create Dimension and Fact tables
-CREATE TABLE gold.dim_customers(
-    customer_key int,
-    customer_id int,
-    customer_number nvarchar(50),
-    first_name nvarchar(50),
-    last_name nvarchar(50),
-    country nvarchar(50),
-    marital_status nvarchar(50),
-    gender nvarchar(50),
-    birthdate date,
-    create_date date
+-- Create schema (in MySQL we typically use databases instead of schemas, 
+-- but we can still use the tables with the schema name prefix)
+-- Create dimension and fact tables
+CREATE TABLE dim_customers (
+    customer_key INT,
+    customer_id INT,
+    customer_number VARCHAR(50),
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    country VARCHAR(50),
+    marital_status VARCHAR(50),
+    gender VARCHAR(50),
+    birthdate DATE,
+    create_date DATE
 );
-PRINT 'Customers dimension table created.';
-GO
 
-CREATE TABLE gold.dim_products(
-    product_key int,
-    product_id int,
-    product_number nvarchar(50),
-    product_name nvarchar(50),
-    category_id nvarchar(50),
-    category nvarchar(50),
-    subcategory nvarchar(50),
-    maintenance nvarchar(50),
-    cost int,
-    product_line nvarchar(50),
-    start_date date 
+CREATE TABLE dim_products (
+    product_key INT,
+    product_id INT,
+    product_number VARCHAR(50),
+    product_name VARCHAR(50),
+    category_id VARCHAR(50),
+    category VARCHAR(50),
+    subcategory VARCHAR(50),
+    maintenance VARCHAR(50),
+    cost INT,
+    product_line VARCHAR(50),
+    start_date DATE
 );
-PRINT 'Products dimension table created.';
-GO
 
-CREATE TABLE gold.fact_sales(
-    order_number nvarchar(50),
-    product_key int,
-    customer_key int,
-    order_date date,
-    shipping_date date,
-    due_date date,
-    sales_amount int,
-    quantity tinyint,
-    price int 
+CREATE TABLE fact_sales (
+    order_number VARCHAR(50),
+    product_key INT,
+    customer_key INT,
+    order_date DATE,
+    shipping_date DATE,
+    due_date DATE,
+    sales_amount INT,
+    quantity TINYINT,
+    price INT
 );
-PRINT 'Sales fact table created.';
-GO
 
--- Import data from CSV files
--- NOTE: Ensure SQL Server has read access to the folder and files.
+-- Optional: Truncate tables before inserting (if running script multiple times)
+TRUNCATE TABLE dim_customers;
+TRUNCATE TABLE dim_products;
+TRUNCATE TABLE fact_sales;
 
--- Customers dimension
-PRINT 'Importing customer data...';
-BULK INSERT gold.dim_customers
-FROM 'C:\sql\sql-data-analytics-project\datasets\csv-files\gold.dim_customers.csv'
-WITH (
-    FIRSTROW = 2,
-    FIELDTERMINATOR = ',',
-    ROWTERMINATOR = '\r\n',
-    TABLOCK,
-    CHECK_CONSTRAINTS,
-    ERRORFILE = 'C:\sql\sql-data-analytics-project\errors\customer_errors.txt'
-);
-GO
+SET GLOBAL local_infile = 1;
+-- Load data using MySQL's LOAD DATA INFILE syntax
+LOAD DATA LOCAL INFILE 
+'D:/SQL-Projects/SQL-data-analytics-project/datasets/csv-files/gold.dim_customers.csv'
+INTO TABLE dim_customers
+FIELDS TERMINATED BY ',' 
+OPTIONALLY ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
 
--- Products dimension
-PRINT 'Importing product data...';
-BULK INSERT gold.dim_products
-FROM 'C:\sql\sql-data-analytics-project\datasets\csv-files\gold.dim_products.csv'
-WITH (
-    FIRSTROW = 2,
-    FIELDTERMINATOR = ',',
-    ROWTERMINATOR = '\r\n',
-    TABLOCK,
-    CHECK_CONSTRAINTS,
-    ERRORFILE = 'C:\sql\sql-data-analytics-project\errors\product_errors.txt'
-);
-GO
+LOAD DATA LOCAL INFILE 
+'D:/SQL-Projects/SQL-data-analytics-project/datasets/csv-files/gold.dim_products.csv'
+INTO TABLE dim_products
+FIELDS TERMINATED BY ','
+OPTIONALLY ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
 
--- Sales fact
-PRINT 'Importing sales data...';
-BULK INSERT gold.fact_sales
-FROM 'C:\sql\sql-data-analytics-project\datasets\csv-files\gold.fact_sales.csv'
-WITH (
-    FIRSTROW = 2,
-    FIELDTERMINATOR = ',',
-    ROWTERMINATOR = '\r\n',
-    TABLOCK,
-    CHECK_CONSTRAINTS,
-    ERRORFILE = 'C:\sql\sql-data-analytics-project\errors\sales_errors.txt'
-);
-GO
-
--- Verify data was loaded correctly
-PRINT 'Verifying data load...';
-PRINT 'Customer count:';
-SELECT COUNT(*) AS CustomerCount FROM gold.dim_customers;
-
-PRINT 'Product count:';
-SELECT COUNT(*) AS ProductCount FROM gold.dim_products;
-
-PRINT 'Sales count:';
-SELECT COUNT(*) AS SalesCount FROM gold.fact_sales;
-GO
-
-PRINT 'Data warehouse setup complete!';
+LOAD DATA LOCAL INFILE 
+'D:/SQL-Projects/SQL-data-analytics-project/datasets/csv-files/gold.fact_sales.csv'
+INTO TABLE fact_sales
+FIELDS TERMINATED BY ',' 
+OPTIONALLY ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
